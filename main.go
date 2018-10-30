@@ -1,13 +1,23 @@
 package main
 
 import (
+	"flag"
 	"bufio"
 	"fmt"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"strings"
+	"regexp"
 )
+
+var shortenKind *bool
+var findLowerCase =  regexp.MustCompile("[a-z]*")
+
+func init()  {
+	shortenKind = flag.Bool("shorten", false, "Shorten the Kind used in the filename")
+	flag.Parse()
+}
 
 func main() {
 	reader := bufio.NewScanner(os.Stdin)
@@ -15,16 +25,20 @@ func main() {
 
 	for reader.Scan() {
 		manifest := reader.Text()
-		kind, name, _ := extractDetails(manifest)
-		ioutil.WriteFile(fmt.Sprintf("%s-%s.yaml", kind, name), []byte(manifest), 0644)
+		filename, _ := buildFilename(manifest)
+		ioutil.WriteFile(filename, []byte(manifest), 0644)
 	}
 }
 
-func extractDetails(manifest string) (string, string, error) {
-	obj := ManifestStub{}
-	yaml.Unmarshal([]byte(strings.ToLower(manifest)), &obj)
+func buildFilename(manifest string) (string, error) {
+	obj := manifestStub{}
+	yaml.Unmarshal([]byte(manifest), &obj)
+	kind := obj.Kind
+	if *shortenKind {
+		kind = findLowerCase.ReplaceAllString(kind, "")
+	}
 
-	return obj.Kind, obj.Metadata.Name, nil
+	return strings.ToLower(fmt.Sprintf("%s-%s.yaml", kind, obj.Metadata.Name)), nil
 }
 
 func splitOnDashes(data []byte, atEOF bool) (int, []byte, error) {
@@ -40,11 +54,11 @@ func splitOnDashes(data []byte, atEOF bool) (int, []byte, error) {
 	return 0, nil, nil
 }
 
-type ManifestStub struct {
+type manifestStub struct {
 	Kind     string
-	Metadata ManifestMetadata
+	Metadata manifestMetadata
 }
 
-type ManifestMetadata struct {
+type manifestMetadata struct {
 	Name string
 }
